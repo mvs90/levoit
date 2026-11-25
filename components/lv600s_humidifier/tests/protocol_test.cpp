@@ -1,0 +1,74 @@
+#include "../protocol.h"
+#include <cassert>
+#include <iostream>
+using namespace esphome::lv600s_humidifier;
+void feed(Protocol &d, const Bytes &f, uint32_t now = 100) { for (auto b : f) d.feed(b, now); }
+Bytes state(bool on = true) {
+  Bytes s(20); s[0] = 56; s[2] = 1; s[3] = on; s[6] = 100; s[8] = 55;
+  s[9] = 42; s[10] = 23; s[11] = 3; s[12] = 4; s[13] = 2;
+  return s;
+}
+int main() {
+  Protocol d; std::vector<Bytes> sent; d.transmit = [&](const Bytes &f) { sent.push_back(f); };
+  feed(d, packet(Command::STATUS, state(), 0, 0x12));
+  assert(d.status.fresh(100) && d.status.raw[9] == 42 && d.status.heating_enabled());
+  feed(d, packet(Command::REPORT, state(false), 1, 0x02), 200);
+  assert(!d.status.heating_enabled() && !d.status.display() && !d.status.humidifying());
+  auto count = d.revision; auto bad = packet(Command::REPORT, state(), 2);
+  bad[9] = 1; bad[5] = checksum(bad); feed(d, bad); assert(d.revision == count);
+  bad[9] = 0; bad[6] = 2; bad[5] = checksum(bad); feed(d, bad); assert(d.revision == count);
+  feed(d, packet(Command::REPORT, Bytes(19), 2)); assert(d.revision == count);
+  auto short_status = state(); short_status.resize(16);
+  feed(d, packet(Command::STATUS, short_status, 3, 0x12)); assert(d.revision == count + 1);
+  // A valid ACK/error that happens to carry reset-looking bytes must not reset Wi-Fi.
+  int buttons = 0; d.panel_event = [&](uint8_t) { ++buttons; };
+  for (uint8_t ctrl : {0x02, 0x12, 0x22, 0x52})
+    for (uint16_t code : {0xD102, 0xD103})
+      for (unsigned action = 0; action < 256; ++action) {
+        feed(d, packet(Command(code), {uint8_t(action)}, 9, ctrl));
+      }
+  assert(buttons == 6); // 02/22: D102/2, D102/3, D103/4 only
+  // Fragmented >255-byte frames, high-byte and checksum corruption, stale fragments.
+  Protocol stream; auto large = packet(Command::WIFI, Bytes(300, 0), 0);
+  feed(stream, Bytes(large.begin(), large.begin() + 200));
+  feed(stream, Bytes(large.begin() + 200, large.end()), 200);
+  auto valid = packet(Command::REPORT, state(), 1);
+  feed(stream, {0xA5, 0x22, 0, 0xF0, 0, 0}, 250); feed(stream, valid, 501);
+  assert(stream.revision == 1);
+  for (auto corrupt : {Bytes{0xA5, 0x22, 0, 4, 0xFF, 0}, Bytes{0xA5, 0x22, 0, 0, 0, 0}}) {
+    feed(stream, corrupt, 502); feed(stream, valid, 502);
+  }
+  assert(stream.revision == 3);
+  bad = valid; bad[5] ^= 1; feed(stream, bad, 503); feed(stream, valid, 503); assert(stream.revision == 4);
+  Protocol wrap; feed(wrap, {0xA5, 0x22}, 0xFFFFFFF0); feed(wrap, valid, 300); assert(wrap.revision == 1);
+  // Off is always available, other setters must not run with missing/unsafe status.
+  Protocol off; std::vector<Bytes> off_tx; off.transmit = [&](const Bytes &f) { off_tx.push_back(f); };
+  assert(!off.enqueue(Command::POWER, {1}, 0));
+  assert(off.enqueue(Command::POWER, {0}, 0)); assert(off_tx[0] == packet(Command::POWER, {0}, 0));
+  assert(!d.enqueue(Command::TARGET, {0, 39}, 200));
+  assert(d.enqueue(Command::DISPLAY, {0}, 200));
+  feed(d, packet(Command::DISPLAY, {}, 1, 0x12), 250);
+  assert(std::string(d.result) == "Sent: waiting for MCU target state");
+  auto st = state(); st[6] = 0; feed(d, packet(Command::REPORT, st, 2), 300);
+  assert(std::string(d.result) == "Target confirmed by MCU");
+  // A timer write is never retried; status ACK alone does not confirm it.
+  assert(d.enqueue(Command::TIMER, {60, 0, 0, 0}, 301));
+  d.tick(2801); assert(d.command_failures == 2); // earlier rejected target + timer timeout
+  feed(d, packet(Command::TIMER_REPORT, {59, 0, 0, 0, 60, 0, 0, 0}, 3, 0x02), 3000);
+  assert(d.remaining(4000) == 58);
+  feed(d, packet(Command::TIMER_REPORT, {59, 0, 0, 0, 60, 0, 0, 0}, 3, 0x02), 4000);
+  assert(d.remaining(5000) == 57); // duplicate snapshots do not restart countdown
+  feed(d, packet(Command::TIMER_REPORT, {61, 0, 0, 0, 60, 0, 0, 0}, 4, 0x02), 5000);
+  assert(d.remaining(5000) == 57);
+  feed(d, packet(Command::TIMER_REPORT, {0, 0, 0, 0, 60, 0, 0, 0}, 5, 0x02), 5100);
+  assert(d.remaining(5100) == 0 && std::isnan(d.remaining(20000)));
+  // Safety changes are rechecked before the next queued command is sent.
+  Protocol q; feed(q, valid, 100); q.enqueue(Command::MIST, {5, 0, 0, 0}, 101);
+  q.enqueue(Command::WARM, {3, 0, 0, 0, 0}, 102);
+  st = state(); st[4] = 1; st[12] = 5; feed(q, packet(Command::REPORT, st, 1), 200); q.tick(201);
+  assert(q.command_failures == 1 && !q.status.heating_enabled());
+  // Explicit OFF cancels queued setters and is the next actual write.
+  q.transmit = [&](const Bytes &f) { sent.push_back(f); };
+  assert(q.enqueue(Command::POWER, {0}, 202)); assert(sent.back()[7] == 0 && sent.back()[8] == 0xA0);
+  std::cout << "LV600S protocol, command confirmation, safety, timer and reset guards passed\n";
+}

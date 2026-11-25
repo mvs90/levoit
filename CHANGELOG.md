@@ -4,6 +4,10 @@
 
 - Decode both length bytes, discard impossible/truncated frames and preserve the incoming sequence in ACKs. Reject foreign-version/error status envelopes on Core 600S and Vital 100S. Host regression tests use the actual receive and ACK methods. Hardware verification of this current upstream revision is pending.
 
+## Unreleased — LV600S
+
+- Add a separate LV600S fixed-layout UART component, device guide, preview builder template and host/compile regressions. New implementation is not yet hardware-tested.
+
 # Change Log
 
 Project-level changes. Component releases have their own log:
