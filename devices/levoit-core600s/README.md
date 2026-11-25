@@ -7,8 +7,8 @@
 | Item | Value |
 |------|-------|
 | Model | Core 600S |
-| Tested MCU FW | 2.0.1 |
-| ESP Module | ESP32-C3-SOLO-1 |
+| Reported MCU FW | 2.0.1 and 1.0.12 (EU unit with earlier owner firmware) |
+| ESP module | Check the board. The verified EU unit uses ESP32-SOLO-1C (ESP32-S0WD, 4 MB) |
 | Fan Speeds | 4 |
 | CADR (spec) | 641 m³/h |
 | Noise | 26–54 dB |
@@ -79,26 +79,18 @@ The header for the microvontroller is highlighted in yellow. This is not what yo
 
 ### Prerequisites
 
-The Core 600S uses an **ESP32-C3-SOLO-1** on the original board. It is recommended to replace it with a new ESP module.
-
-**Recommended modules:**
-- Seeed XIAO ESP32-C3
-- Seeed XIAO ESP32-S3
+An EU `LAP-C601S-WEU` with MCU 1.0.12 ran ESPHome on its original
+**ESP32-SOLO-1C**. It was identified as a single-core ESP32-S0WD with 4 MB flash
+and used the original partition table. On that board the MCU UART runs at
+115200 8N1, with GPIO17 as ESP TX and GPIO16 as ESP RX. The flash UART is
+separate. Verify the chip and wiring for your board before choosing a config.
 
 ### Configure
 
-1. Copy `secrets-example.yaml` → `secrets.yaml` and fill in your Wi-Fi and encryption key
-2. Choose the config matching your replacement module
-
-### Flash
-
-```bash
-esphome run levoit-core600s-c3.yaml
-```
-
-```bash
-esphome run levoit-core600s-s3.yaml
-```
+Copy `secrets-example.yaml` to a local `secrets.yaml` and supply your Wi-Fi
+and device keys. For the verified original SOLO-1C, use the original-module
+config `levoit-core600s.yaml`. The C3 and S3 configs target replacement boards.
+Keep the installed device's partition layout and credentials for later OTA.
 
 ### ESPHome Web Builder / Dashboard
 
@@ -133,5 +125,13 @@ Same UART protocol as Core 300S/400S with these differences:
 - ACK uses `0x52` response type (not `0x12`) with trailing byte `0x01`
 - Light Detect command: `CMD=01 E9 A5` PAY=`01`/`00`
 - 4 Auto Mode options: Default (`00`), Quiet (`01`), Room Size (`02` + room_size LE), ECO (`03`)
-- Status byte layout: display `[8]`, AQI `[11]`, PM2.5 `[12-13]`, child lock `[14]`, auto mode `[15]`, room size `[16-17]`, light detect `[21]`
+- Status byte layout: display `[8]`, AQI `[11]`, PM2.5 `[12-13]`, child lock `[14]`, auto mode `[15]`, room size `[16-17]`, light detect `[21]`.
+- The EU stock ESP requests full status with SEND `01 41 41` and no payload.
+  Its MCU replies with `0x12 / 01 41 41`. The earlier owner firmware polled
+  this every five seconds so a quiet device could still report current status.
+- On the EU unit, payload byte 22 carries fault bits, including bit 0 (E1,
+  service code 11802000) and bit 1 (E2, 11014000). The assembled unit reported
+  zero in normal operation. A stale or truncated report does not establish that
+  the device is fault-free. The periodical status query and raw fault reporting
+  are implemented in the owner profile.
 - Room size encoding: raw = sq_ft × 3.15 (MCU uses scaled sq ft)

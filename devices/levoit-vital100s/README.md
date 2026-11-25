@@ -153,11 +153,14 @@ ESP's TX disconnected: both modules would otherwise drive the same line.
 
 ### Prerequisites
 
-Connect to the debug header with a USB-UART adapter (3.3V TTL), crossing TX/RX:
-- Adapter TX → MCU RX
-- Adapter RX → MCU TX
+With mains disconnected and a verified isolated power supply, connect a
+3.3 V logic USB-UART adapter to the **ESP programming UART** on the debug header.
+Adapter TX goes to ESP RX and adapter RX to ESP TX. The appliance MCU UART
+uses GPIO18/19 and is available at separate test pads.
 
-Connect **IO0 to GND before powering on** to enter bootloader mode.
+The ESP32-C3 enters the serial bootloader with **GPIO9 low at reset** and
+GPIO8 high. Verify continuity before using a pad marked `IO0` or `BOOT`.
+See [Espressif’s ESP32-C3 boot mode reference](https://docs.espressif.com/projects/esptool/en/latest/esp32c3/advanced-topics/boot-mode-selection.html).
 
 ### Backup Existing Firmware
 
@@ -165,7 +168,10 @@ Connect **IO0 to GND before powering on** to enter bootloader mode.
 esptool read_flash 0 ALL levoit-vital100s-backup.bin
 ```
 
-> Note: may fail if watchdog-protected. Try while powered externally.
+Save and compare two full reads. Check chip and protection state before a
+write. On the verified 4 MB EU ESP32-C3 rev. 0.4, the initial isolated supply
+caused brownouts after flash. Once reassembled with the serial adapter removed,
+the unit booted normally and exchanged status with MCU 1.0.5.
 
 ### Configure
 
@@ -223,3 +229,23 @@ Using AZ-Delivery TM1637 display to drive 16 LEDs: SEG1=LED1, SEG2=LED2, ...
 
 ![TM1637](./images/TM1637.jpg)
 ![LEDs to TM1637](./images/leds_to_tm1637.png)
+
+
+### Additional EU observations
+
+The stock EU ESP requests status with SEND `02 01 55` and no payload. The MCU
+replies with `0x12 / 02 01 55` and the same TLV layout as the spontaneous
+`02 00 55` status. In the earlier owner firmware, polling that reply kept the
+sensor diagnostic current even when no status push was due. Missing tag
+`0x0A` leaves the sensor diagnostic unknown until a fresh value arrives.
+
+Room size requests use `round(m² × 10.764 × 1.3)`. Tests on the EU unit
+confirmed raw MCU values 126, 174 and 728 for 9, 12.4 and 52 m². The reported
+174 converts back to about 12.43 m² due to quantisation. Store the requested
+12.4 m² separately from the MCU's decoded value if retaining exact control
+settings. The owner profile preserves this precision.
+
+The earlier owner firmware also confirmed physical fan levels 1–4, Sleep and
+off, display response and the Wi-Fi connection indicator on this hardware.
+These observations describe that deployment. The current fork builds still
+need their own hardware check.

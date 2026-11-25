@@ -25,6 +25,8 @@ Main reference: [protocol sheet](https://docs.google.com/spreadsheets/d/1vSKuPWY
 - **Baud rate:** 115200
 - **Format:** 8N1
 
+The [LV600S](./devices/levoit-lv600s/PROTOCOL.md) uses 9600 baud and its own fixed-layout payload.
+
 ---
 
 ## Frame Format
@@ -33,8 +35,8 @@ Main reference: [protocol sheet](https://docs.google.com/spreadsheets/d/1vSKuPWY
 [0]  0xA5          start byte
 [1]  msg_type      0x22=SEND  0x12=ACK  0x52=ACK (Core600S / Sprout)
 [2]  counter       increments per sent packet, starts at 0x10; MCU echoes ESP's counter
-[3]  length        number of bytes after the checksum byte: msg.size() - 6
-[4]  0x00          reserved
+[3]  length_lo     low byte of the number of bytes after the checksum
+[4]  length_hi     high byte of that length, zero in the observed short frames
 [5]  checksum      0xFF - (sum of all bytes except [5]) & 0xFF
 [6]  cmd[0]        \
 [7]  cmd[1]         > command / payload type (3 bytes, model-specific)
@@ -45,7 +47,10 @@ Main reference: [protocol sheet](https://docs.google.com/spreadsheets/d/1vSKuPWY
 
 **Checksum** (from `levoit_checksum()`): sum all bytes except byte[5], take `0xFF - (sum & 0xFF)`.
 
-**Counter** starts at `0x10` (16). ESP increments per outgoing packet; MCU echoes the same counter value in its ACK.
+**Counter** starts at `0x10` (16) for ESP-originated commands. A reply
+echoes the sequence of the incoming request or push. It does not consume an
+outgoing command sequence. The observed Core 600S reply to push sequence zero
+is `A5 52 00 04 00 81 01 40 41 01`.
 
 ---
 
@@ -55,7 +60,7 @@ Main reference: [protocol sheet](https://docs.google.com/spreadsheets/d/1vSKuPWY
 |-------|------|-----------|-------|
 | `0x22` | SEND | both | Normal message carrying payload |
 | `0x12` | ACK  | both | Acknowledgement, minimal or no payload |
-| `0x52` | ACK  | MCU→ESP | Core600S and Sprout — replaces `0x12` with trailing `0x01` |
+| `0x52` | ACK | ESP→MCU for Core 600S | Reply to Core 600S status push `01 40 41` has trailing `0x01`. Also used by Sprout with its own exchange |
 
 ### `0x22` CMD Families
 
@@ -228,6 +233,11 @@ Same as Core 300S except:
 | 15 | B.25 | Auto mode | `0x00`=Default, `0x01`=Quiet, `0x02`=Room Size, `0x03`=ECO |
 | 16–17 | B.26–B.27 | Efficiency area | LE16 raw (see [Room Size Encoding](#room-size-encoding)) |
 | 21 | B.31 | Light detect | `0x00`=off, `0x01`=on |
+| 22 | B.32 | EU fault flags | Bit 0 E1 (11802000), bit 1 E2 (11014000). Higher bits have no confirmed meaning |
+
+The stock EU unit also accepts an empty `01 41 41` status request, with a
+`0x12 / 01 41 41` reply. The [Core 600S guide](./devices/levoit-core600s/README.md#protocol-notes)
+describes the tested owner polling and diagnostics.
 
 ---
 
