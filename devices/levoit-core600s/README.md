@@ -2,6 +2,8 @@
 
 # Levoit Core 600S - Custom Firmware (ESPHome)
 
+[EU owner live test with `1.0.09-tuct-review`](../../docs/esphome-devices/owner-test.md)
+
 ## Quick Facts
 
 | Item | Value |

@@ -2,6 +2,8 @@
 
 # Levoit Vital 100S - Custom Firmware (ESPHome)
 
+[EU owner live test with `1.0.06-tuct-review`](../../docs/esphome-devices/owner-test.md)
+
 ## Quick Facts
 
 | Item | Value |
