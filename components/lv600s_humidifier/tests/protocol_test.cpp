@@ -18,8 +18,13 @@ int main() {
   bad[9] = 1; bad[5] = checksum(bad); feed(d, bad); assert(d.revision == count);
   bad[9] = 0; bad[6] = 2; bad[5] = checksum(bad); feed(d, bad); assert(d.revision == count);
   feed(d, packet(Command::REPORT, Bytes(19), 2)); assert(d.revision == count);
+  auto extended = state();
+  extended[19] = 42;
+  feed(d, packet(Command::REPORT, extended, 3));
+  assert(d.status.size == 20 && d.status.raw[19] == 42);
   auto short_status = state(); short_status.resize(16);
-  feed(d, packet(Command::STATUS, short_status, 3, 0x12)); assert(d.revision == count + 1);
+  feed(d, packet(Command::STATUS, short_status, 4, 0x12));
+  assert(d.revision == count + 2 && d.status.size == 16 && d.status.raw[19] == 0);
   // A valid ACK/error that happens to carry reset-looking bytes must not reset Wi-Fi.
   int buttons = 0; d.panel_event = [&](uint8_t) { ++buttons; };
   for (uint8_t ctrl : {0x02, 0x12, 0x22, 0x52})
@@ -62,6 +67,36 @@ int main() {
   assert(d.remaining(5000) == 57);
   feed(d, packet(Command::TIMER_REPORT, {0, 0, 0, 0, 60, 0, 0, 0}, 5, 0x02), 5100);
   assert(d.remaining(5100) == 0 && std::isnan(d.remaining(20000)));
+  // The EU MCU can report only at start/expiry. Fresh ordinary status keeps
+  // the countdown available but cannot confirm zero or revive a stale link.
+  Protocol sparse;
+  feed(sparse, valid, 1000);
+  feed(sparse, packet(Command::TIMER_REPORT, {60, 0, 0, 0, 60, 0, 0, 0}, 1), 1000);
+  for (uint32_t t = 6000; t <= 71000; t += 5000) feed(sparse, valid, t);
+  assert(std::isnan(sparse.remaining(71000)));
+
+  Protocol countdown;
+  feed(countdown, valid, 1000);
+  feed(countdown, packet(Command::TIMER_REPORT, {60, 0, 0, 0, 60, 0, 0, 0}, 1), 1000);
+  for (uint32_t t = 6000; t <= 61000; t += 5000) {
+    feed(countdown, valid, t);
+    const auto elapsed = (t - 1000) / 1000;
+    assert(countdown.remaining(t) == (elapsed < 60 ? 60 - elapsed : 1));
+  }
+  feed(countdown, packet(Command::TIMER_REPORT, {0, 0, 0, 0, 60, 0, 0, 0}, 2), 61500);
+  assert(countdown.remaining(61500) == 0);
+  feed(countdown, valid, 66000);
+  feed(countdown, valid, 71000);
+  feed(countdown, valid, 76000);
+  assert(countdown.remaining(78000) == 0);
+  feed(countdown, valid, 92000);
+  assert(std::isnan(countdown.remaining(92000)));
+  countdown.enqueue(Command::TIMER, {1, 0, 0, 0}, 92001);
+  feed(countdown, packet(Command::TIMER_QUERY, {0, 0}, 3, 0x12), 92020);
+  assert(std::string(countdown.result) == "Sent: waiting for MCU target state");
+  feed(countdown, packet(Command::TIMER_QUERY, {1, 0}, 4, 0x12), 92030);
+  assert(std::string(countdown.result) == "Target confirmed by MCU");
+
   // Safety changes are rechecked before the next queued command is sent.
   Protocol q; feed(q, valid, 100); q.enqueue(Command::MIST, {5, 0, 0, 0}, 101);
   q.enqueue(Command::WARM, {3, 0, 0, 0, 0}, 102);

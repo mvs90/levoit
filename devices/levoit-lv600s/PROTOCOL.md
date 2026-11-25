@@ -18,7 +18,9 @@ not send automatic report ACKs either.
 
 ## Status
 
-4110 requests/returns status (16 or 20 bytes); 4111 pushes 20 bytes. Payload:
+`0x4110` polls status. The decoder accepts 16- and 20-byte replies and
+20-byte `0x4111` pushes. The assembled EU unit confirmed the push path. The raw
+diagnostic shows the actual payload length, including any trailing bytes received.
 
 | Offset | Meaning |
 |---|---|
@@ -28,7 +30,7 @@ not send automatic report ACKs either.
 | 5 | Water shortage |
 | 6 | Display setting, 0/100 |
 | 7 | Fog state; zero participates in the derived humidifying state |
-| 8 | Target RH |
+| 8 | Target RH. Manual mode reported 100, which is outside the adjustable 40–80% range |
 | 9 | Current RH |
 | 10 | Temperature |
 | 11 | Mode: 0 original Auto (read only), 1 Manual, 2 Humidity Sleep, 3 Humidity |
@@ -65,7 +67,13 @@ A bounded eight-command queue confirms setters from later status reports, not
 just ACKs. At most one retry for idempotent setters; timers are never retried.
 Explicit off cancels queued setters and remains available with missing status.
 Safety is checked again when a queued command is sent. Repeated timer snapshots
-do not restart the host's countdown; expiry requires a zero from the MCU.
+do not restart the countdown. The EU MCU sometimes only sent a timer report at
+start and expiry. Fresh ordinary status keeps the estimate available for the
+reported duration plus a 10-second confirmation window. A zero report confirms
+expiry or cancellation. A stale or resumed MCU connection requires a new timer
+report. Following power-off from a timer, the MCU can report zero remaining
+with the original total still present. Cancellation was observed as 0/0 with
+the appliance still on.
 
 ## Power-button events
 
@@ -84,3 +92,38 @@ wdm230/levoit-lv600s-esphome source. That project is credited as prior work.
 The committed fixtures are synthetic, not raw private UART captures. New code is
 host-tested and fully compiled; **it has not yet been installed or physically
 validated on a humidifier**. Confirm it on hardware before calling it tested.
+
+## Observations from the assembled EU unit
+
+| Check | Observation with the earlier local firmware |
+|---|---|
+| MCU version | Status bytes `38 00 01` decode to 1.0.56 |
+| Tank absent | Payload bytes 4/5 were 1/1. An empty installed tank gave 0/1, and a filled tank gave 0/0 |
+| Water runs out | Water shortage and inactive fog were reported while power was still on. The MCU entered standby about 10 seconds later without an ESP off command |
+| Display | `0xA105` with 0/100 changed only the display during the test. Standby stayed dark with a retained value of 100. No independent button backlight control was demonstrated |
+| Timer | A two-minute timer reported 120/120 and cancelled with 0/0. A one-minute timer reported 60/60, then 0/60 at expiry and switched the appliance off after about 60.5 seconds |
+| Mist and warmth | The MCU confirmed mist 1–9 and warmth 0–3. The three app-scale selections map to 1, 5 and 9. The test did not measure heater output |
+
+The earlier implementation also exercised time-based power on/off from its ESPHome
+configuration. The firmware component leaves scheduling to the device config or
+Home Assistant. Original Auto is a reported mode without a verified setter.
+
+### Fault diagnostics
+
+The EU stock ESP maps payload byte 15 to these service codes. The descriptions
+name the fault category. They do not identify a failed part or measure heater
+temperature.
+
+| Raw | Display/category | Stock service code |
+|---:|---|---:|
+| 0 | No reported MCU fault | — |
+| 1 | E1, dry-run protection | 11601000 |
+| 2 | E2, PTC heater | 11602000 |
+| 3 | E3, overtemperature | 11603000 |
+| 4 | E4, water fault | 11604000 |
+| 5 | Meaning unconfirmed for LV600S | 11014000 |
+| 6 | E6, communication fault | 11607000 |
+
+E6 and raw value 6 were observed together on the isolated bench setup. The
+assembled unit reported 0 in normal operation. Other nonzero values are exposed
+as raw codes. A disconnected or stale MCU reports unknown status.

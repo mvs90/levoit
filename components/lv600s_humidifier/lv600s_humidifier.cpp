@@ -45,8 +45,20 @@ void LV600SHumidifier::publish_() {
   }
   char version[24]; std::snprintf(version, sizeof(version), "%u.%u.%02u", v[2], v[1], v[0]);
   char raw[61]{};
-  for (size_t i = 0; i < v.size(); ++i) std::snprintf(raw + i * 3, 4, "%02X ", v[i]);
-  char fault[64]; std::snprintf(fault, sizeof(fault), v[15] ? "MCU fault (raw %u)" : "No reported MCU fault", v[15]);
+  for (size_t i = 0; i < s.size; ++i) std::snprintf(raw + i * 3, 4, "%02X ", v[i]);
+  static constexpr const char *FAULTS[] = {
+      "No reported MCU fault", "E1: Dry-run protection (11601000)", "E2: PTC heater (11602000)",
+      "E3: Overtemperature (11603000)", "E4: Water fault (11604000)", "MCU code 5 (11014000)",
+      "E6: Communication fault (11607000)",
+  };
+  char unknown_fault[48];
+  const char *fault;
+  if (v[15] < sizeof(FAULTS) / sizeof(FAULTS[0])) {
+    fault = FAULTS[v[15]];
+  } else {
+    std::snprintf(unknown_fault, sizeof(unknown_fault), "Unknown MCU fault (raw %u)", v[15]);
+    fault = unknown_fault;
+  }
   const std::string states[] = {fresh ? version : "Unknown", protocol_.result, fresh ? raw : "Unknown",
                                  fresh ? fault : "Unknown", LV600S_VERSION " esphome", "LV600S"};
   for (size_t i = 0; i < texts_.size(); ++i) if (texts_[i]) texts_[i]->publish_state(states[i]);

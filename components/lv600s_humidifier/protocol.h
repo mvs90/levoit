@@ -38,10 +38,12 @@ inline Bytes packet(Command command, const Bytes &payload, uint8_t sequence, uin
 }
 
 struct Status {
+  static constexpr uint32_t FRESH_MS = 15000;
   std::array<uint8_t, 20> raw{};
+  size_t size{0};
   uint32_t received{0};
   bool seen{false};
-  bool fresh(uint32_t now) const { return seen && uint32_t(now - received) < 15000; }
+  bool fresh(uint32_t now) const { return seen && uint32_t(now - received) < FRESH_MS; }
   bool power() const { return raw[3] != 0; }
   bool tank_removed() const { return raw[4] != 0; }
   bool water_empty() const { return raw[5] != 0; }
@@ -63,7 +65,11 @@ class Protocol {
   void query_timer() { write_(Command::TIMER_QUERY, {}); }
   void wifi(const Bytes &payload) { write_(Command::WIFI, payload); }
   bool timer_known(uint32_t now) const {
-    return status.fresh(now) && timer_seen_ && uint32_t(now - timer_received_) < 15000;
+    if (!status.fresh(now) || !timer_seen_) return false;
+    // The MCU may report only at start and expiry. While its status is fresh,
+    // keep counting down and allow a short window for the final confirmation.
+    return timer_seconds_ == 0 ||
+           uint32_t(now - timer_received_) / 1000 < timer_seconds_ + 10;
   }
   float remaining(uint32_t now) const {
     if (!timer_known(now)) return NAN;
@@ -81,6 +87,7 @@ class Protocol {
     return true;
   }
   void tick(uint32_t now) {
+    if (!status.fresh(now)) timer_seen_ = false;
     if (!rx_.empty() && uint32_t(now - rx_at_) > 250) { rx_.clear(); ++rx_errors; }
     if (active_ && uint32_t(now - sent_) >= 2500) {
       auto &p = pending_.front();
@@ -165,31 +172,38 @@ class Protocol {
     }
     if ((code == uint16_t(Command::STATUS) && (send || reply) && (n == 16 || n == 20)) ||
         (code == uint16_t(Command::REPORT) && send && n == 20)) {
+      // A resumed status stream does not validate the previous timer snapshot.
+      if (!status.fresh(now)) timer_seen_ = false;
+      status.raw.fill(0);
       std::copy(p, p + n, status.raw.begin());
+      status.size = n;
       status.seen = true; status.received = now; ++revision;
       confirm_(now, false);
     } else if ((code == uint16_t(Command::TIMER_QUERY) && (send || reply) && (n == 2 || n == 4)) ||
                (code == uint16_t(Command::TIMER_REPORT) && send && n == 8)) {
       const uint32_t seconds = n == 2 ? uint32_t(p[0]) | (uint32_t(p[1]) << 8) : le32(p);
       if (seconds > 43200 || (n == 8 && (le32(p + 4) > 43200 || seconds > le32(p + 4)))) return;
-      const bool setting = active_ && pending_.front().code == Command::TIMER;
-      if (!timer_known(now) || seconds != timer_seconds_ || setting) timer_received_ = now;
+      const bool confirms_write = timer_matches_(seconds, now);
+      if (!timer_seen_ || seconds != timer_seconds_ || confirms_write) timer_received_ = now;
       timer_seconds_ = seconds; timer_seen_ = true;
       confirm_(now, true);
     }
     // ACKs alone do not prove that the appliance has applied a state change.
+  }
+  bool timer_matches_(uint32_t seconds, uint32_t now) const {
+    if (!active_ || pending_.front().code != Command::TIMER) return false;
+    const uint32_t target = le32(pending_.front().payload.data());
+    if (target == 0) return seconds == 0;
+    const uint32_t elapsed = uint32_t(now - sent_) / 1000;
+    const uint32_t expected = target > elapsed ? target - elapsed : 0;
+    return seconds > 0 && std::abs(int(seconds) - int(expected)) <= 2;
   }
   void confirm_(uint32_t now, bool timer) {
     if (!active_ || pending_.empty()) return;
     const auto &c = pending_.front(); const auto &p = c.payload;
     bool matches = false;
     if (timer) {
-      if (c.code == Command::TIMER) {
-        const uint32_t target = le32(p.data());
-        const uint32_t elapsed = uint32_t(now - sent_) / 1000;
-        const uint32_t expected = target > elapsed ? target - elapsed : 0;
-        matches = target == 0 ? timer_seconds_ == 0 : std::abs(int(timer_seconds_) - int(expected)) <= 2;
-      }
+      matches = timer_matches_(timer_seconds_, now);
     } else {
       switch (c.code) {
         case Command::POWER: matches = status.power() == (p[0] != 0); break;
