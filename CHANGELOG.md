@@ -1,5 +1,9 @@
 [← Back to the project README](./README.md)
 
+## Unreleased — LV600S
+
+- Add a separate LV600S fixed-layout UART component, device guide, preview builder template and host/compile regressions. New implementation is not yet hardware-tested.
+
 # Change Log
 
 Project-level changes. Component releases have their own log:

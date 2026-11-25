@@ -38,7 +38,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
 $Utf8NoBom = New-Object System.Text.UTF8Encoding $false
 # Components that live in this repo and can come from GitHub.
-$RepoComponents = @("levoit", "philips")
+$RepoComponents = @("levoit", "philips", "lv600s_humidifier")
 
 function Read-Text([string]$Path) {
     # ReadAllText honours a BOM and defaults to UTF-8. Get-Content in
@@ -162,7 +162,7 @@ function New-BuilderYaml([string]$DeviceYaml) {
         "  - source:",
         "      type: git",
         "      url: https://github.com/tuct/levoit",
-        "      ref: $Ref",
+        "      ref: $(if ($components -contains 'lv600s_humidifier') { 'main' } else { $Ref })",
         "    components: [$($components -join ', ')]",
         "    refresh: always"
     ) -join "`n"
@@ -178,6 +178,7 @@ $Titles = @{
     "levoit-core300s"       = "Levoit Core 300S"
     "levoit-core400s"       = "Levoit Core 400S"
     "levoit-core600s"       = "Levoit Core 600S"
+    "levoit-lv600s"         = "Levoit LV600S"
     "levoit-eleva-300x"     = "Levoit Eleva 300X"
     "levoit-everest-air"    = "Levoit Everest Air"
     "levoit-superior-6000s" = "Levoit Superior 6000S"
@@ -193,7 +194,7 @@ function Get-TemplateEntry([string]$DeviceYaml, [string]$OutputPath, [string]$Te
     $file = Split-Path $OutputPath -Leaf
     $board = ([regex]::Match($Text, '(?m)^  board:\s*(\S+)')).Groups[1].Value
     $name = ([regex]::Match($Text, '(?m)^  device_name:\s*(\S+)')).Groups[1].Value
-    $m = [regex]::Match($Text, '(?m)^(levoit|philips):[ \t]*\n(?:[ \t]+.*\n)*?[ \t]+model:\s*(\S+)')
+    $m = [regex]::Match($Text, '(?m)^(levoit|philips|lv600s_humidifier):[ \t]*\n(?:[ \t]+.*\n)*?[ \t]+model:\s*(\S+)')
     if (-not $m.Success) { return $null }
     $component = $m.Groups[1].Value
     $model = $m.Groups[2].Value
@@ -202,7 +203,7 @@ function Get-TemplateEntry([string]$DeviceYaml, [string]$OutputPath, [string]$Te
     }
     if ($board -eq "seeed_xiao_esp32c3") {
         $variant = "xiao_c3"
-    } elseif ($component -eq "levoit" -and $file -eq "$folder-builder.yaml") {
+    } elseif ($component -in @("levoit", "lv600s_humidifier") -and $file -eq "$folder-builder.yaml") {
         $variant = "original"
     } elseif ($board -match 'c3') {
         $variant = "c3"
