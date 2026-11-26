@@ -17,11 +17,9 @@ EU `LUH-A602S-WEUR` with the original ESP32-SOLO-1C and owner firmware
   Existing installations must preserve their own original table and access keys.
 
 Copy `secrets-example.yaml` to a private `secrets.yaml`; supply unique credentials.
-The preview sources reference upstream `main`. To compile these examples from
-the tested fork, set their LV600S external-component source URL to
-`https://github.com/mvs90/levoit` and the ref to
-`13f7ff6e6fee448158400fab8d5ab4c189dada64`. Existing appliances with original
-partitions, required OTA encryption or the owner's reset behaviour should use
+The preview sources on this branch use the firmware fork's `codex/owner-test`
+branch. They incorporate the release-review changes. Existing appliances with
+original partitions, required OTA encryption or the owner's reset behaviour should use
 the [secure owner profiles](https://github.com/mvs90/levoit-lv600s-local/tree/codex/tuct-alignment).
 
 Controls: power, display, Manual/Humidity/Humidity Sleep, target RH 40–80%, mist
@@ -31,6 +29,7 @@ component/model/version sensors support Home Assistant discovery. A native HA
 humidifier entity and full original Auto parity are not implemented.
 
 [Wire format, commands, safety and evidence](PROTOCOL.md).
+[Release review and dependencies](RELEASE-REVIEW.md).
 
 Prior work: [wdm230/levoit-lv600s-esphome](https://github.com/wdm230/levoit-lv600s-esphome).
 No source from that repository is bundled here. The component belongs to this

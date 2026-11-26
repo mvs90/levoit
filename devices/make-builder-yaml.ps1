@@ -157,12 +157,24 @@ function New-BuilderYaml([string]$DeviceYaml) {
     }
 
     $relative = (Split-Path $deviceDir -Leaf) + "/" + (Split-Path $DeviceYaml -Leaf)
+    $sourceUrl = "https://github.com/tuct/levoit"
+    $sourceRef = $Ref
+    if ($components -contains 'lv600s_humidifier') {
+        # Keep the preview repository/ref from its source package. This also
+        # lets the owner test branch build before LV600S lands upstream.
+        $lvSource = Read-Text (Join-Path $deviceDir "source.yaml")
+        $lvUrl = [regex]::Match($lvSource, '(?m)^\s+url:\s*(https://github\.com/[^\s]+)[ \t]*$')
+        $lvRef = [regex]::Match($lvSource, '(?m)^\s+ref:\s*([A-Za-z0-9_./-]+)[ \t]*$')
+        if (!$lvUrl.Success -or !$lvRef.Success) { throw "LV600S source must declare a GitHub URL and git ref: $DeviceYaml" }
+        $sourceUrl = $lvUrl.Groups[1].Value
+        $sourceRef = $lvRef.Groups[1].Value
+    }
     $source = @(
         "external_components:",
         "  - source:",
         "      type: git",
-        "      url: https://github.com/tuct/levoit",
-        "      ref: $(if ($components -contains 'lv600s_humidifier') { 'main' } else { $Ref })",
+        "      url: $sourceUrl",
+        "      ref: $sourceRef",
         "    components: [$($components -join ', ')]",
         "    refresh: always"
     ) -join "`n"
