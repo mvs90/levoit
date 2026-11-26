@@ -2,28 +2,26 @@
 
 # Levoit LV600S / LUH-A602S-WEUR
 
-Development support for the ultrasonic warm/cool-mist LV600S, using the original
-ESP32-SOLO-1C. This is not the evaporative Superior 6000S. The previous private
-implementation worked on this EU unit; **the new code here is not yet tested on
-hardware**. Do not infer support for every LV600S variant.
+Local ESPHome support for the ultrasonic warm/cool-mist LV600S, tested on one
+EU `LUH-A602S-WEUR` with the original ESP32-SOLO-1C and owner firmware
+`1.2.02-tuct-review`. [Live verification](../../docs/esphome-devices/owner-test.md)
 
 - Module: ESP32-SOLO-1C / ESP32-S0WD, single core, 4 MB on the observed board.
 - MCU UART: GPIO17 TX → MCU RX, GPIO16 RX ← MCU TX, **9600 8N1**.
-- UART0 for flashing: GPIO1 TX, GPIO3 RX, GPIO0 strap, EN and GND. Main-board
-  underside pads are not validated by a photo or module pin count.
-- Disconnect mains and unknown power electronics before a serial connection.
-  Use verified isolated power and 3.3 V logic. Do not attach a USB serial adapter
-  to an open mains-powered appliance. Preserve two complete original backups,
-  verify chip/protection state and retain its original partition table.
+- UART0 for flashing uses GPIO1 TX, GPIO3 RX and common GND. Bridge GPIO0 to
+  GND to start the ESP32 ROM bootloader. Use an isolated external 5 V supply
+  at the verified board input and a UART adapter with 3.3 V logic. Leave the
+  adapter's VCC disconnected. [Disassembly and serial access](HARDWARE.md)
 - This example uses ESPHome's default partition table for a **new installation**.
   It is not a drop-in OTA profile for the owner's already converted appliance.
   Existing installations must preserve their own original table and access keys.
 
 Copy `secrets-example.yaml` to a private `secrets.yaml`; supply unique credentials.
-The preview builder file pulls `main` until this component is released. Keep a
-custom/pinned configuration for existing appliances with special partitions,
-required OTA encryption or reset policy; do not replace one with the generic
-password-based example. No flashing or resetting is performed by this repository.
+The contribution targets upstream `main`. For a preview before integration,
+use the LV600S example on the firmware fork's `codex/owner-test` branch.
+Existing appliances with original partitions, required OTA encryption or the
+owner's reset behaviour should use
+the [secure owner profiles](https://github.com/mvs90/levoit-lv600s-local/tree/codex/tuct-alignment).
 
 Controls: power, display, Manual/Humidity/Humidity Sleep, target RH 40–80%, mist
 1–9, warmth 0–3 and a timer up to 12 h with cancel. Original Auto and unknown mode
@@ -32,6 +30,7 @@ component/model/version sensors support Home Assistant discovery. A native HA
 humidifier entity and full original Auto parity are not implemented.
 
 [Wire format, commands, safety and evidence](PROTOCOL.md).
+[Release review and dependencies](RELEASE-REVIEW.md).
 
 Prior work: [wdm230/levoit-lv600s-esphome](https://github.com/wdm230/levoit-lv600s-esphome).
 No source from that repository is bundled here. The component belongs to this

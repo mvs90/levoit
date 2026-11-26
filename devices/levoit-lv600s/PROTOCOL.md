@@ -66,7 +66,10 @@ older than 15 seconds is unavailable and cannot authorize an on/change command.
 A bounded eight-command queue confirms setters from later status reports, not
 just ACKs. At most one retry for idempotent setters; timers are never retried.
 Explicit off cancels queued setters and remains available with missing status.
-Safety is checked again when a queued command is sent. Repeated timer snapshots
+The release candidate discards pending setters when MCU status becomes stale
+or reports a tank, water or fault condition. A subsequent good report does
+not replay the discarded writes. The explicit off command remains pending
+until confirmed or timed out. Repeated timer snapshots
 do not restart the countdown. The EU MCU sometimes only sent a timer report at
 start and expiry. Fresh ordinary status keeps the estimate available for the
 reported duration plus a 10-second confirmation window. A zero report confirms
@@ -89,9 +92,11 @@ The byte layout and commands were compared with an owner's previously working
 LV600S deployment and analysis of that owner's firmware. This new implementation
 is independently written; it does not vendor the separate, unlicensed
 wdm230/levoit-lv600s-esphome source. That project is credited as prior work.
-The committed fixtures are synthetic, not raw private UART captures. New code is
-host-tested and fully compiled; **it has not yet been installed or physically
-validated on a humidifier**. Confirm it on hardware before calling it tested.
+The committed fixtures are synthetic. The initial component ran on the
+assembled EU unit through the encrypted owner firmware. That run confirmed
+power, display, mist, warmth, modes, target humidity, timer start and cancel.
+The newer queue safety correction is covered by synthetic fault and recovery
+tests and requires a separate device run. [Release review](RELEASE-REVIEW.md)
 
 ## Observations from the assembled EU unit
 
