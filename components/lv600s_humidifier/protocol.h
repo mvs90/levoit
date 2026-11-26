@@ -64,6 +64,8 @@ class Protocol {
   void query() { write_(Command::STATUS, {}); }
   void query_timer() { write_(Command::TIMER_QUERY, {}); }
   void wifi(const Bytes &payload) { write_(Command::WIFI, payload); }
+  bool has_timer_report() const { return timer_seen_; }
+  bool commands_idle() const { return pending_.empty(); }
   bool timer_known(uint32_t now) const {
     if (!status.fresh(now) || !timer_seen_) return false;
     // The MCU may report only at start and expiry. While its status is fresh,
@@ -77,6 +79,11 @@ class Protocol {
     const uint32_t elapsed = uint32_t(now - timer_received_) / 1000;
     // MCU confirmation is required for expiry, never invent an off/zero state.
     return float(timer_seconds_ > elapsed ? timer_seconds_ - elapsed : 1);
+  }
+  float timer_duration(uint32_t now) const {
+    if (!timer_known(now)) return NAN;
+    if (timer_seconds_ == 0) return 0.0f;
+    return timer_total_ > 0 ? float(timer_total_) : NAN;
   }
   bool enqueue(Command command, Bytes payload, uint32_t now) {
     if (!allowed_(command, payload, now)) return fail_("Rejected: stale/unsafe status or mode");
@@ -136,7 +143,7 @@ class Protocol {
   Bytes rx_;
   std::deque<Pending> pending_;
   uint8_t sequence_{0};
-  uint32_t rx_at_{0}, sent_{0}, timer_received_{0}, timer_seconds_{0};
+  uint32_t rx_at_{0}, sent_{0}, timer_received_{0}, timer_seconds_{0}, timer_total_{0};
   bool active_{false}, queried_{false}, timer_seen_{false};
 
   bool fail_(const char *message) { ++command_failures; result = message; return false; }
@@ -201,10 +208,16 @@ class Protocol {
     } else if ((code == uint16_t(Command::TIMER_QUERY) && (send || reply) && (n == 2 || n == 4)) ||
                (code == uint16_t(Command::TIMER_REPORT) && send && n == 8)) {
       const uint32_t seconds = n == 2 ? uint32_t(p[0]) | (uint32_t(p[1]) << 8) : le32(p);
-      if (seconds > 43200 || (n == 8 && (le32(p + 4) > 43200 || seconds > le32(p + 4)))) return;
+      const uint32_t total = n == 8 ? le32(p + 4) : 0;
+      if (seconds > 43200 || (n == 8 && (total > 43200 || seconds > total))) return;
       if (!status.fresh(now)) return;
       const bool confirms_write = timer_matches_(seconds, now);
-      if (!timer_seen_ || seconds != timer_seconds_ || confirms_write) timer_received_ = now;
+      const bool total_changed = n == 8 && timer_total_ != total;
+      if (!timer_seen_ || seconds != timer_seconds_ || total_changed || confirms_write) timer_received_ = now;
+      if (seconds == 0) timer_total_ = 0;
+      else if (n == 8) timer_total_ = total;
+      else if (confirms_write) timer_total_ = le32(pending_.front().payload.data());
+      else if (!timer_seen_ || seconds > timer_seconds_) timer_total_ = 0;
       timer_seconds_ = seconds; timer_seen_ = true;
       confirm_(now, true);
     }
