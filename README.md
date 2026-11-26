@@ -79,7 +79,7 @@ same in-repo components — a Levoit humidifier is just another `model:` for the
 
 | Model | Manufacturer | Support | Methods | Tank | Output (spec) | Disassembly | Guide | Links | Comments |
 |-------|--------------|---------|---------|------|---------------|-------------|-------|-------|----------|
-| [LV600S / LUH-A602S-WEUR](./devices/levoit-lv600s) | Levoit | 🏠 [`lv600s_humidifier`](./components/lv600s_humidifier) | 🟢 Flash original ESP | 6 L | — | — | [Guide](./devices/levoit-lv600s) | — | 🚧 Development: new code host/compile-tested, hardware test pending; warm/cool mist |
+| [LV600S / LUH-A602S-WEUR](./devices/levoit-lv600s) | Levoit | 🏠 [`lv600s_humidifier`](./components/lv600s_humidifier) | 🟢 Flash original ESP | 6 L | — | Easy | [Guide](./devices/levoit-lv600s) | — | 🚧 Development: new code host/compile-tested, hardware test pending; warm/cool mist |
 | [Superior 6000S](./devices/levoit-superior-6000s) | Levoit | 🏠 [`levoit`](./components/levoit/README.md) | 🟢 Flash / 🔵 Add ESP | 6 L | 500 mL/h | Easy | [Guide](./devices/levoit-superior-6000s) | — | 🚧 **Untested on hardware** · evaporative; 9 fan speeds, target humidity, auto-dry, temperature + humidity sensors |
 
 The legend is the same as for the purifiers above — **Tank** and **Output** are

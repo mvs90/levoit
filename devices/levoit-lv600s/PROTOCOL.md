@@ -95,8 +95,9 @@ wdm230/levoit-lv600s-esphome source. That project is credited as prior work.
 The committed fixtures are synthetic. The initial component ran on the
 assembled EU unit through the encrypted owner firmware. That run confirmed
 power, display, mist, warmth, modes, target humidity, timer start and cancel.
-The newer queue safety correction is covered by synthetic fault and recovery
-tests and requires a separate device run. [Release review](RELEASE-REVIEW.md)
+The newer queue safety correction passed synthetic fault and recovery tests
+and the real empty-tank check. Filled-tank and physical reset checks of this
+build remain open. [Release review](RELEASE-REVIEW.md)
 
 ## Observations from the assembled EU unit
 
