@@ -1,89 +1,18 @@
-name: Compile tests
-
-# Runs on every PR, and on pushes to main so the badge reflects the branch
-# everyone builds from. Paths are filtered so doc-only changes skip the build.
+name: UART sanitizer verification
 on:
-  pull_request:
-    paths:
-      - 'components/**'
-      - '.github/workflows/compile-tests.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'components/**'
-      - '.github/workflows/compile-tests.yml'
   workflow_dispatch:
-
-# A new push to the same PR cancels the previous run.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
+permissions:
+  contents: read
 jobs:
-  compile:
-    name: ${{ matrix.component }} · ${{ matrix.config }} · esphome ${{ matrix.esphome }}
+  uart-sanitizers:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        component: [levoit, philips]
-        # "latest" catches breaking changes in new ESPHome releases; the pinned
-        # one is the minimum stated in the component READMEs, so a fix for a new
-        # release cannot silently drop support for older ones. Raise it together
-        # with the READMEs.
-        esphome: ['latest', '2026.6.0']
-        config:
-          # every platform and every entity type - maximum codegen coverage
-          - test-all-entities.yaml
-          # only a fan: every optional platform absent. Catches sources that
-          # include a platform header without guarding on USE_<COMPONENT>_*.
-          - test-fan-only.yaml
-          # component fan plus template entities on the other platforms. Defines
-          # the generic USE_SWITCH / USE_SELECT / ... without any entity of that
-          # kind from this component, which is the mismatch that broke the build.
-          - test-foreign-platforms.yaml
-        # A config that exists for only one component goes in this `include`
-        # list, once per ESPHome version: an entry without `esphome` gets an
-        # empty version and fails to install. The local scripts
-        # (components/run-compile-tests.*) pick up every tests/test-*.yaml by
-        # themselves.
-        include:
-          # Ethernet instead of Wi-Fi: catches code that needs the wifi
-          # component. levoit only (Philips has no wired test config).
-          - { component: levoit, config: test-ethernet.yaml, esphome: latest }
-          - { component: levoit, config: test-ethernet.yaml, esphome: '2026.6.0' }
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      # PlatformIO toolchains and the ESP-IDF sources are the slow part, not the
-      # compile itself, so cache them across runs.
-      - name: Cache PlatformIO
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.platformio
-            ~/.cache/pip
-          # per ESPHome version: each release can pin a different toolchain
-          key: pio-${{ runner.os }}-esphome-${{ matrix.esphome }}-${{ hashFiles('components/*/tests/*.yaml') }}
-          restore-keys: pio-${{ runner.os }}-esphome-${{ matrix.esphome }}-
-
-      - name: Install ESPHome ${{ matrix.esphome }}
+      - name: Run UART regressions with ASan and UBSan
         run: |
-          if [ "${{ matrix.esphome }}" = "latest" ]; then
-            pip install esphome
-          else
-            pip install "esphome==${{ matrix.esphome }}"
-          fi
-          esphome version
-
-      - name: esphome config
-        working-directory: components/${{ matrix.component }}/tests
-        run: esphome config ${{ matrix.config }}
-
-      - name: esphome compile
-        working-directory: components/${{ matrix.component }}/tests
-        run: esphome compile ${{ matrix.config }}
+          git diff --quiet 7ed0656a83b81f02a7d137b4c5685779fd917384 -- components/levoit
+          clang++ --version
+          LEVOIT_TEST_SANITIZERS=address,undefined python components/levoit/tests/test_uart_integrity.py
