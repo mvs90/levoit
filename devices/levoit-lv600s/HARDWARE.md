@@ -21,23 +21,26 @@ your unit before applying the guide. Board layouts and firmware can vary.
 3. Carefully fold the display housing forward as shown in Figure 2. Support it
    so its weight does not pull on the harness. Remove the circuit-board screws
    shown in that figure. Release any connector by its housing or latch.
-4. Lift the board out and turn it over. Figure 3 shows where the serial wires
-   are soldered on the underside of the documented board. Before soldering,
+4. Lift the board out and turn it over to expose the display and Wi-Fi module.
+   Figure 3 shows the wires soldered to the ESP32 module. Before soldering,
    identify each point by continuity to the corresponding module pin with all
    power disconnected. Check for bridges and strain on the wires afterwards.
 
 ### Figure 1 — Screws on the rear of the display housing
 
-Photo pending.
+![Four recessed screw locations circled in red on the rear of the display housing](images/01-display-housing-screws.jpg)
 
 ### Figure 2 — Display folded forward and board retaining screws
 
-Photo pending.
+![Display housing folded forward, with four circuit-board retaining screws circled in red](images/02-display-board-screws.jpg)
 
-### Figure 3 — Board underside and verified serial connections
+### Figure 3 — ESP32 programming wires and 5 V input
 
-Photo and pad verification pending. The table below identifies the module
-signals needed to check the pads on this board revision.
+![Component side of the display board with wires soldered to the ESP32 module and the CN1 +5 V and GND contacts outlined in green](images/03-serial-and-power-wiring.jpg)
+
+The green outline marks the `+5V` and `GND` contacts on CN1 for the external
+supply on this board. Use the table to verify the ESP32 programming connections
+before soldering.
 
 | ESP32-SOLO-1C signal | Serial setup |
 |---|---|
