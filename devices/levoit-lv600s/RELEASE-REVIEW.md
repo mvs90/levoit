@@ -23,6 +23,12 @@ a custom local builder config, which avoids automatic template rewrites.
 
 ## Verification and scope
 
+- The release candidate compiled with all LV600S entities under ESPHome
+  2026.6.0 and 2026.10.2. The secure owner candidate also compiled with its
+  original partition table, existing keys and required encrypted OTA.
+  The current HA and upstream 0.6.8 contribution branches each passed 154
+  pytest cases, Ruff lint and formatting, and the frontend state test.
+
 - The assembled owner device ran `1.2.01-tuct-review` and `1.2.02-tuct-review`.
   Local power, display, mist, warm level, humidity target, modes, countdown and
   timer cancel were confirmed. Firmware `1.2.02-tuct-review` reported mist,
