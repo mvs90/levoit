@@ -98,12 +98,29 @@ int main() {
   assert(std::string(countdown.result) == "Target confirmed by MCU");
 
   // Safety changes are rechecked before the next queued command is sent.
-  Protocol q; feed(q, valid, 100); q.enqueue(Command::MIST, {5, 0, 0, 0}, 101);
+  Protocol q; std::vector<Bytes> safety_tx;
+  q.transmit = [&](const Bytes &f) { safety_tx.push_back(f); };
+  feed(q, valid, 100); q.enqueue(Command::MIST, {5, 0, 0, 0}, 101);
   q.enqueue(Command::WARM, {3, 0, 0, 0, 0}, 102);
-  st = state(); st[4] = 1; st[12] = 5; feed(q, packet(Command::REPORT, st, 1), 200); q.tick(201);
-  assert(q.command_failures == 1 && !q.status.heating_enabled());
+  st = state(); st[4] = 1; st[12] = 5; feed(q, packet(Command::REPORT, st, 1), 200);
+  assert(q.command_failures == 2 && !q.status.heating_enabled());
+  feed(q, valid, 201); q.tick(201);
+  assert(safety_tx.size() == 1);  // fresh status in the same burst cannot revive either write
+
+  Protocol disconnected;
+  disconnected.transmit = [&](const Bytes &f) { safety_tx.push_back(f); };
+  feed(disconnected, valid, 100);
+  disconnected.enqueue(Command::WARM, {3, 0, 0, 0, 0}, 15090);
+  feed(disconnected, valid, 15100); disconnected.tick(17600);
+  assert(disconnected.command_failures == 1 && safety_tx.size() == 2);
+
   // Explicit OFF cancels queued setters and is the next actual write.
-  q.transmit = [&](const Bytes &f) { sent.push_back(f); };
-  assert(q.enqueue(Command::POWER, {0}, 202)); assert(sent.back()[7] == 0 && sent.back()[8] == 0xA0);
+  assert(q.enqueue(Command::POWER, {0}, 202));
+  assert(q.enqueue(Command::WARM, {1, 0, 0, 0, 0}, 203));
+  feed(q, packet(Command::REPORT, st, 2), 204);
+  assert(safety_tx.back()[7] == 0 && safety_tx.back()[8] == 0xA0);
+  auto standby = state(false); standby[4] = 1;
+  feed(q, packet(Command::REPORT, standby, 3), 205);
+  assert(std::string(q.result) == "Target confirmed by MCU");
   std::cout << "LV600S protocol, command confirmation, safety, timer and reset guards passed\n";
 }
