@@ -114,6 +114,24 @@ int main() {
   feed(disconnected, valid, 15100); disconnected.tick(17600);
   assert(disconnected.command_failures == 1 && safety_tx.size() == 2);
 
+  // Known and unknown MCU faults must follow the same write restrictions.
+  for (const uint8_t fault : {1, 2, 3, 4, 5, 6, 255}) {
+    Protocol faulted;
+    auto status = state();
+    status[15] = fault;
+    feed(faulted, packet(Command::REPORT, status, 1), 100);
+    assert(!faulted.status.humidifying() && !faulted.status.heating_enabled());
+    assert(!faulted.enqueue(Command::POWER, {1}, 101));
+    assert(!faulted.enqueue(Command::WARM, {3, 0, 0, 0, 0}, 101));
+    assert(faulted.enqueue(Command::POWER, {0}, 101));
+  }
+  Protocol dry;
+  auto dry_status = state();
+  dry_status[5] = 1;
+  feed(dry, packet(Command::REPORT, dry_status, 1), 100);
+  assert(!dry.enqueue(Command::MIST, {5, 0, 0, 0}, 101));
+  assert(dry.enqueue(Command::POWER, {0}, 101));
+
   // Explicit OFF cancels queued setters and is the next actual write.
   assert(q.enqueue(Command::POWER, {0}, 202));
   assert(q.enqueue(Command::WARM, {1, 0, 0, 0, 0}, 203));
