@@ -16,7 +16,9 @@ EU `LUH-A602S-WEUR` with the original ESP32-SOLO-1C and owner firmware
   It is not a drop-in OTA profile for the owner's already converted appliance.
   Existing installations must preserve their own original table and access keys.
 
-Copy `secrets-example.yaml` to a private `secrets.yaml`; supply unique credentials.
+Copy `secrets-example.yaml` to a private `secrets.yaml` and replace every
+placeholder. Generate the API key with `openssl rand -base64 32` and choose
+unique OTA and setup access point passwords.
 The contribution targets upstream `main`. For a preview before integration,
 use the LV600S example on the firmware fork's `codex/owner-test` branch.
 Existing appliances with original partitions, required OTA encryption or the

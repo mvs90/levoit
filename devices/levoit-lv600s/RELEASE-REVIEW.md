@@ -28,6 +28,9 @@ a custom local builder config, which avoids automatic template rewrites.
   original partition table, existing keys and required encrypted OTA.
   The current HA and upstream 0.6.8 contribution branches each passed 154
   pytest cases, Ruff lint and formatting, and the frontend state test.
+- On ESPHome 2026.10.2 all seven Levoit and Philips comparison profiles
+  compiled. Both LV600S example configurations resolved the published
+  component from the owner fork and validated with a generated API key.
 
 - The assembled owner device ran `1.2.01-tuct-review` and `1.2.02-tuct-review`.
   Local power, display, mist, warm level, humidity target, modes, countdown and
