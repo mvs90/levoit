@@ -13,6 +13,8 @@ your unit before applying the guide. Board layouts and firmware can vary.
 
 ## Disassembly
 
+The housing is easy to open. Serial programming requires soldering to the module pads.
+
 1. Remove the water tank and set it aside. Remove the lid, nozzle and any other
    loose parts that could drop out while you handle the base. Drain the base
    and let it dry.

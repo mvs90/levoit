@@ -42,6 +42,16 @@ a custom local builder config, which avoids automatic template rewrites.
   timer expiry and physical display response. The newer queue correction was
   exercised with synthetic stale and unsafe transitions, including recovery
   in the same receive burst and a pending off command.
+- On 26 November 2026 the owner LV600S accepted `1.2.03-queue-review` via
+  encrypted OTA. With the empty tank installed and the unit in standby, the
+  firmware rejected power-on, mist, warm level, mode, timer and display writes.
+  The MCU confirmed an explicit off command. Settings were checked after the
+  test. The tank-removal, filled-tank and physical reset checks of this build
+  still need hands-on access.
+- HA integration 0.6.8 identified the real device and mapped all 20 controls
+  and diagnostics in an isolated HA 2026.10.4 instance. The native encrypted
+  ESPHome connection supplied the states. The test used a simulated Device
+  Builder listing and exercised a blocked ON and a confirmed OFF through HA.
 - The release candidate uses the same entity names and command payloads.
   Original Auto is read-only. Heating and humidifying flags are derived from
   MCU status. Long-term behaviour, other board and MCU revisions, and the
