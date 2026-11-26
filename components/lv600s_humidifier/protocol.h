@@ -80,7 +80,7 @@ class Protocol {
   }
   bool enqueue(Command command, Bytes payload, uint32_t now) {
     if (!allowed_(command, payload, now)) return fail_("Rejected: stale/unsafe status or mode");
-    if (command == Command::POWER && payload == Bytes{0}) { pending_.clear(); active_ = false; }
+    if (is_off_(command, payload)) { pending_.clear(); active_ = false; }
     if (pending_.size() >= 8) return fail_("Rejected: command queue full");
     pending_.push_back({command, std::move(payload), 0});
     tick(now);
@@ -89,6 +89,7 @@ class Protocol {
   void tick(uint32_t now) {
     if (!status.fresh(now)) timer_seen_ = false;
     if (!rx_.empty() && uint32_t(now - rx_at_) > 250) { rx_.clear(); ++rx_errors; }
+    discard_unsafe_(now);
     if (active_ && uint32_t(now - sent_) >= 2500) {
       auto &p = pending_.front();
       if (p.code != Command::TIMER && p.retries == 0 && allowed_(p.code, p.payload, now)) {
@@ -139,11 +140,25 @@ class Protocol {
   bool active_{false}, queried_{false}, timer_seen_{false};
 
   bool fail_(const char *message) { ++command_failures; result = message; return false; }
+  static bool is_off_(Command c, const Bytes &p) {
+    return c == Command::POWER && p.size() == 1 && p[0] == 0;
+  }
+  void discard_unsafe_(uint32_t now) {
+    if (pending_.empty() || (status.fresh(now) && status.safe())) return;
+    const bool keep_off = is_off_(pending_.front().code, pending_.front().payload);
+    const size_t retained = keep_off ? 1 : 0;
+    const size_t discarded = pending_.size() - retained;
+    if (discarded == 0) return;
+    pending_.erase(pending_.begin() + retained, pending_.end());
+    if (!keep_off) active_ = false;
+    command_failures += discarded;
+    result = "Rejected: MCU or tank safety state changed";
+  }
   void write_(Command command, const Bytes &payload) {
     if (transmit) transmit(packet(command, payload, sequence_++));
   }
   bool allowed_(Command c, const Bytes &p, uint32_t now) const {
-    if (c == Command::POWER && p == Bytes{0}) return true;
+    if (is_off_(c, p)) return true;
     if (!status.fresh(now) || !status.safe()) return false;
     switch (c) {
       case Command::POWER: return p == Bytes{1};
@@ -173,16 +188,21 @@ class Protocol {
     if ((code == uint16_t(Command::STATUS) && (send || reply) && (n == 16 || n == 20)) ||
         (code == uint16_t(Command::REPORT) && send && n == 20)) {
       // A resumed status stream does not validate the previous timer snapshot.
-      if (!status.fresh(now)) timer_seen_ = false;
+      if (!status.fresh(now)) {
+        timer_seen_ = false;
+        discard_unsafe_(now);
+      }
       status.raw.fill(0);
       std::copy(p, p + n, status.raw.begin());
       status.size = n;
       status.seen = true; status.received = now; ++revision;
+      discard_unsafe_(now);
       confirm_(now, false);
     } else if ((code == uint16_t(Command::TIMER_QUERY) && (send || reply) && (n == 2 || n == 4)) ||
                (code == uint16_t(Command::TIMER_REPORT) && send && n == 8)) {
       const uint32_t seconds = n == 2 ? uint32_t(p[0]) | (uint32_t(p[1]) << 8) : le32(p);
       if (seconds > 43200 || (n == 8 && (le32(p + 4) > 43200 || seconds > le32(p + 4)))) return;
+      if (!status.fresh(now)) return;
       const bool confirms_write = timer_matches_(seconds, now);
       if (!timer_seen_ || seconds != timer_seconds_ || confirms_write) timer_received_ = now;
       timer_seconds_ = seconds; timer_seen_ = true;
